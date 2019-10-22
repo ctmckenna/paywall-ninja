@@ -2,7 +2,7 @@
     "name": "Paywall Blocker",
     "manifest_version": 2,
     "version": "1.0",
-    "description": "Read the failing nytimes and other publications that aren't worth your time",
+    "description": "Read the failing New York Times and other publications that aren't worth your time",
     "permissions": [
         "contentSettings",
         "cookies",
@@ -15,11 +15,16 @@
         "persistent": false
     },
     "page_action": {
-        "default_icon": "icon-19.png",
-        "default_title": "click me"
+        "default_icon": {
+            "16": "emoji16.png",
+            "48": "emoji48.png",
+            "128": "emoji128.png"
+        },
+        "default_title": "Click to bypass paywall"
     },
     "icons" : {
-        "48" : "icon-48.png",
-        "128" : "icon-128.png"
+        "16": "emoji16.png",
+        "48": "emoji48.png",
+        "128": "emoji128.png"
     }
 }
