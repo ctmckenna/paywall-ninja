@@ -4,23 +4,6 @@ console.log('i am here!!!!');
 var javascript_enabled = true;
 var tabToUrlMap = {};
 
-/*
-function clear_changes_listener(details) {
-    clear_changes();
-}
-
-function add_clear_changes_listener() {
-    chrome.webNavigation.onBeforeNavigate.addListener(clear_changes_listener,
-                                                      {url: [{hostSuffix: "nytimes.com"}, {hostSuffix: "washingtonpost.com"}]});
-    console.log('add listener');
-}
-
-function remove_clear_changes_listener() {
-    chrome.webNavigation.onBeforeNavigate.removeListener(clear_changes_listener);
-    console.log('remove listener');
-}
-*/
-
 function saveWashingtonPostUrl(tab) {
     if (!tab || !tab.url) {
         return;
@@ -58,12 +41,6 @@ chrome.pageAction.onClicked.addListener(function(tab) {
                 chrome.tabs.reload(tab.id)
             }
         });
-        /*var last_url = tabToUrlMap[tab.id];
-        if (last_url) {
-            chrome.tabs.update(tab.id, {url: last_url});
-        } else {
-            chrome.tabs.reload(tab.id);
-        }*/
     }
 });
 
