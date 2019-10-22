@@ -1,0 +1,25 @@
+{
+    "name": "Paywall Blocker",
+    "manifest_version": 2,
+    "version": "1.0",
+    "description": "Read the failing nytimes and other publications that aren't worth your time",
+    "permissions": [
+        "contentSettings",
+        "cookies",
+        "webNavigation",
+        "*://*.nytimes.com/*",
+        "*://*.washingtonpost.com/*"
+    ],
+    "background": {
+        "scripts": ["disable_js.js"],
+        "persistent": false
+    },
+    "page_action": {
+        "default_icon": "icon-19.png",
+        "default_title": "click me"
+    },
+    "icons" : {
+        "48" : "icon-48.png",
+        "128" : "icon-128.png"
+    }
+}
