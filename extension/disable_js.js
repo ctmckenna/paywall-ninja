@@ -23,7 +23,6 @@ chrome.webNavigation.onCompleted.addListener(function(details) {
     chrome.pageAction.show(details.tabId);
     if (!javascript_enabled) {
         clear_changes();
-        //add_clear_changes_listener();
     }
 }, {url: [{hostSuffix: "nytimes.com"}, {hostSuffix: "washingtonpost.com"}]});
 
@@ -35,14 +34,18 @@ chrome.pageAction.onClicked.addListener(function(tab) {
     } else if (hostname.includes('washingtonpost')) {
         var last_url = tabToUrlMap[tab.id];
         disable_washingtonpost(() => {
-            if (last_url) {
-                chrome.tabs.update(tab.id, {url: last_url});
-            } else {
-                chrome.tabs.reload(tab.id)
-            }
+            reloadTab(tab, last_url);
         });
     }
 });
+
+function reloadTab(tab, url) {
+    if (url) {
+        chrome.tabs.update(tab.id, {url: url});
+    } else {
+        chrome.tabs.reload(tab.id);
+    }
+}
 
 function clear_changes() {
     console.log('enable javascript');
