@@ -7,12 +7,15 @@
         "contentSettings",
         "cookies",
         "webNavigation",
+        "webRequest",
+        "webRequestBlocking",
         "*://*.nytimes.com/*",
-        "*://*.washingtonpost.com/*"
+        "*://*.washingtonpost.com/*",
+        "*://*.wsj.com/*"
     ],
     "background": {
         "scripts": ["disable_js.js"],
-        "persistent": false
+        "persistent": true
     },
     "page_action": {
         "default_icon": {
