@@ -1,7 +1,4 @@
-console.log('i am here!!!!');
-
-
-var javascript_enabled = true;
+var bypass = false;
 var tabToUrlMap = {};
 
 function saveWashingtonPostUrl(tab) {
@@ -21,23 +18,65 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
 
 chrome.webNavigation.onCompleted.addListener(function(details) {
     chrome.pageAction.show(details.tabId);
-    if (!javascript_enabled) {
+    if (bypass) {
         clear_changes();
+        bypass = false;
     }
-}, {url: [{hostSuffix: "nytimes.com"}, {hostSuffix: "washingtonpost.com"}]});
+}, {url: [
+    {hostSuffix: "nytimes.com"},
+    {hostSuffix: "washingtonpost.com"},
+    {hostSuffix: "wsj.com"}
+]});
+
+chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
+    if (!bypass) {
+        return;
+    }
+    var requestHeaders = details.requestHeaders;
+    removeHeaders(requestHeaders, ['Referer', 'User-Agent', 'X-Forwarded-For']);
+    requestHeaders.push({
+        name: 'User-Agent',
+        value: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+    });
+    requestHeaders.push({
+        name: 'X-Forwarded-For',
+        value: '66.249.66.2'
+    });
+    return { requestHeaders: requestHeaders };
+}, {
+    urls: ["*://*.wsj.com/*"]
+}, ["blocking", "requestHeaders", "extraHeaders"]);
 
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
     if (hostname.includes('nytimes')) {
+        bypass = true;
         disable_nytimes();
         chrome.tabs.reload(tab.id);
     } else if (hostname.includes('washingtonpost')) {
+        bypass = true;
         var last_url = tabToUrlMap[tab.id];
         disable_washingtonpost(() => {
             reloadTab(tab, last_url);
         });
+    } else if (hostname.includes('wsj')) {
+        bypass = true;
+        disable_wsj(() => {
+            chrome.tabs.reload(tab.id);
+        });
     }
 });
+
+function removeHeaders(headers, headerNames) {
+    for (var i = 0; i < headers.length;) {
+        var header = headers[i];
+        if (headerNames.includes(header.name)) {
+            headers.splice(i, 1);
+        } else {
+            ++i;
+        }
+    }
+}
 
 function reloadTab(tab, url) {
     if (url) {
@@ -48,15 +87,16 @@ function reloadTab(tab, url) {
 }
 
 function clear_changes() {
-    console.log('enable javascript');
     chrome.contentSettings.javascript.clear({});
-    javascript_enabled = true;
 }
 
 function disable_nytimes(callback) {
-    console.log('disable javascript');
     disable_javascript("https://*.nytimes.com/*");
     remove_cookies(".nytimes.com", callback);
+}
+
+function disable_wsj(callback) {
+    remove_cookies(".wsj.com", callback);
 }
 
 function disable_washingtonpost(callback) {
@@ -64,7 +104,6 @@ function disable_washingtonpost(callback) {
 }
 
 function disable_javascript(url_pattern) {
-    javascript_enabled = false;
     chrome.contentSettings.javascript.set({
         "primaryPattern": url_pattern,
         "setting": "block"
