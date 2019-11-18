@@ -45,7 +45,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
     return { requestHeaders: requestHeaders };
 }, {
     urls: ["*://*.wsj.com/*"]
-}, ["blocking", "requestHeaders", "extraHeaders"]);
+}, ["blocking", "requestHeaders"]);
 
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
