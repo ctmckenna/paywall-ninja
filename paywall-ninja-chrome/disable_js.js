@@ -1,6 +1,56 @@
 var bypass = false;
 var tabToUrlMap = {};
 
+var bot_domains=[
+    "wsj.com",
+    "theathletic.com"
+]
+
+var cookie_domains=[
+    "nytimes.com",
+    "washingtonpost.com"
+]
+
+var js_domains=[
+    "nytimes.com"
+]
+
+var all_domains = joinDomains([cookie_domains, bot_domains])
+
+function joinDomains(domains) {
+    domains = domains.flat();
+    var set = new Set();
+    var all = [];
+    for (var i = 0; i < domains.length; ++i) {
+        set.add(domains[i]);
+    }
+    return Array.from(set);
+}
+
+function domainToRegex(domain) {
+    return "*://*." + domain + "/*";
+}
+
+//eg bot_sites to
+//    *://*.wsj.com/*
+function domainsToRegex(domains) {
+    var arr = [];
+    for (var i = 0; i < domains.length; ++i) {
+        arr.push(domainToRegex(domains[i]));
+    }
+    return arr;
+}
+
+function domainsToHostSuffixFilter(domains) {
+    var filter = [];
+    for (var i = 0; i < domains.length; ++i) {
+        filter.push({
+            hostSuffix: domains[i]
+        });
+    }
+    return filter;
+}
+
 function saveWashingtonPostUrl(tab) {
     if (!tab || !tab.url) {
         return;
@@ -22,18 +72,14 @@ chrome.webNavigation.onCompleted.addListener(function(details) {
         clear_changes();
         bypass = false;
     }
-}, {url: [
-    {hostSuffix: "nytimes.com"},
-    {hostSuffix: "washingtonpost.com"},
-    {hostSuffix: "wsj.com"}
-]});
+}, {url: domainsToHostSuffixFilter(all_domains)});
 
 chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
     if (!bypass) {
         return;
     }
     var requestHeaders = details.requestHeaders;
-    removeHeaders(requestHeaders, ['Referer', 'User-Agent', 'X-Forwarded-For']);
+    removeHeaders(requestHeaders, ['User-Agent', 'X-Forwarded-For']);
     requestHeaders.push({
         name: 'User-Agent',
         value: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
@@ -44,25 +90,31 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
     });
     return { requestHeaders: requestHeaders };
 }, {
-    urls: ["*://*.wsj.com/*"]
+    urls: domainsToRegex(bot_domains)
 }, ["blocking", "requestHeaders"]);
 
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
-    if (hostname.includes('nytimes')) {
-        bypass = true;
-        disable_nytimes();
-        chrome.tabs.reload(tab.id);
-    } else if (hostname.includes('washingtonpost')) {
-        bypass = true;
-        var last_url = tabToUrlMap[tab.id];
-        disable_washingtonpost(() => {
-            reloadTab(tab, last_url);
-        });
-    } else if (hostname.includes('wsj')) {
-        bypass = true;
-        disable_wsj(() => {
-            chrome.tabs.reload(tab.id);
+    var domain = all_domains.find(d => hostname.includes(d));
+    var promises = [];
+    var urlToLoad = null;
+    if (cookie_domains.includes(domain)) {
+        promises.push(remove_cookies("." + domain, () => promise.resolve()))
+    }
+    if (bot_domains.includes(domain)) {
+        promises.push(Promise.resolve());
+    }
+    if (js_domains.includes(domain)) {
+        disable_javascript(domainToRegex(domain));
+        promises.push(Promise.resolve());
+    }
+    if (domain === 'washingtonpost.com') {
+        urlToLoad = tabToUrlMap[tab.id];
+    }
+    if (promises.length > 0) {
+        Promise.all(promises).then(() => {
+            bypass = true;
+            reloadTab(tab, urlToLoad);
         });
     }
 });
@@ -88,19 +140,6 @@ function reloadTab(tab, url) {
 
 function clear_changes() {
     chrome.contentSettings.javascript.clear({});
-}
-
-function disable_nytimes(callback) {
-    disable_javascript("https://*.nytimes.com/*");
-    remove_cookies(".nytimes.com", callback);
-}
-
-function disable_wsj(callback) {
-    remove_cookies(".wsj.com", callback);
-}
-
-function disable_washingtonpost(callback) {
-    remove_cookies(".washingtonpost.com", callback);
 }
 
 function disable_javascript(url_pattern) {
@@ -136,55 +175,6 @@ function remove_cookies(domain, callback) {
             });
             promises.push(promise);
         }
-        Promise.all(promises).then(() => {
-            if (callback) {
-                callback();
-            }
-        });
+        return Promise.all(promises);
     });
 }
-
-function open(tab) {
-    var hostname = new URL(tab.url).hostname;
-    var pattern = "*://" + hostname + "/*";
-    chrome.contentSettings.javascript.set({
-        "primaryPattern": hostname,
-        "setting": "block"
-    });
-    chrome.cookies.getAll({
-        "domain": hostname
-    }, function (cookies) {
-        for (var i = 0; i < cookies.length; ++i) {
-            var cookie = cookies[i];
-            chrome.cookies.remove({
-                url: "https://" + cookie.domain + cookie.path,
-                name: cookie.name
-            });
-        }
-    });
-}
-
-/*
-var patterns = ["https://*.nytimes.com/*"];
-for (var i = 0; i < patterns.length; ++i) {
-    chrome.contentSettings.javascript.set({
-        "primaryPattern": patterns[i],
-        "setting": "block"
-    });
-}
-Var domains = [".nytimes.com", ".washingtonpost.com"];
-for (var i = 0; i < domains.length; ++i) {
-    chrome.cookies.getAll({
-        "domain": domains[i]
-    }, function (cookies) {
-        for (var i = 0; i < cookies.length; ++i) {
-            var cookie = cookies[i];
-            chrome.cookies.remove({
-                url: "https://" + cookie.domain + cookie.path,
-                name: cookie.name
-            });
-        }
-    });
-
-}
-*/
