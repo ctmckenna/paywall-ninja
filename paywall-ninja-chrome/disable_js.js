@@ -12,10 +12,11 @@ var cookie_domains=[
 ]
 
 var js_domains=[
-    "nytimes.com"
+    "nytimes.com",
+    "latimes.com"
 ]
 
-var all_domains = joinDomains([cookie_domains, bot_domains])
+var all_domains = joinDomains([cookie_domains, bot_domains, js_domains])
 
 function joinDomains(domains) {
     domains = domains.flat();

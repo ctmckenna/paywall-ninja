@@ -13,3 +13,5 @@ Bypass paywalls by clicking the 🤓 emoji to the right of the address bar.
 * New York Times
 * Washington Post
 * Wall Street Journal
+* The Athletic
+* Los Angeles Times
