@@ -13,7 +13,9 @@ var cookie_domains=[
 
 var js_domains=[
     "nytimes.com",
-    "latimes.com"
+    "latimes.com",
+    "sfchronicle.com",
+    "economist.com"
 ]
 
 var all_domains = joinDomains([cookie_domains, bot_domains, js_domains])

@@ -13,7 +13,9 @@
         "*://*.washingtonpost.com/*",
         "*://*.theathletic.com/*",
         "*://*.wsj.com/*",
-        "*://*.latimes.com/*"
+        "*://*.latimes.com/*",
+        "*://*.sfchronicle.com/*",
+        "*://*.economist.com/*"
     ],
     "background": {
         "scripts": ["disable_js.js"],
