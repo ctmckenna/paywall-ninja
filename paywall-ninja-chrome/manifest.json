@@ -15,7 +15,8 @@
         "*://*.wsj.com/*",
         "*://*.latimes.com/*",
         "*://*.sfchronicle.com/*",
-        "*://*.economist.com/*"
+        "*://*.economist.com/*",
+        "*://*.wired.com/*"
     ],
     "background": {
         "scripts": ["disable_js.js"],

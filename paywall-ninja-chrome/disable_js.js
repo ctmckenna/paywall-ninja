@@ -8,7 +8,8 @@ var bot_domains=[
 
 var cookie_domains=[
     "nytimes.com",
-    "washingtonpost.com"
+    "washingtonpost.com",
+    "wired.com"
 ]
 
 var js_domains=[
