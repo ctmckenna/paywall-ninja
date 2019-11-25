@@ -1,7 +1,7 @@
 {
     "name": "Paywall Ninja",
     "manifest_version": 2,
-    "version": "1.1",
+    "version": "1.5",
     "description": "Click emoji to bypass newspaper paywalls",
     "permissions": [
         "contentSettings",
