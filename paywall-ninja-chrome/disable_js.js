@@ -1,3 +1,12 @@
+var GA_CLIENT_KEY = 'ga:clientId';
+
+var analyticsReadyPromise = new Promise((resolve, reject) => {
+    fetch_client_id()
+        .then(create_ga_tracker)
+        .then(save_client_id)
+        .then(resolve);
+});
+
 var bypass = false;
 var tabToUrlMap = {};
 
@@ -20,6 +29,40 @@ var js_domains=[
 ]
 
 var all_domains = joinDomains([cookie_domains, bot_domains, js_domains])
+
+function create_ga_tracker(clientId) {
+    var createOptions = {
+        storage: 'none',
+        storeGac: false
+    }
+    if (clientId) {
+        createOptions['clientId'] = clientId;
+    }
+    ga('create', 'UA-39947032-2', createOptions);
+    ga('set', 'checkProtocolTask', function(){ /* nothing */ });
+    return new Promise((resolve, reject) => {
+        ga(function(tracker) {
+            resolve(tracker.get('clientId'));
+        });
+    });
+}
+
+function save_client_id(clientId) {
+    console.log('saving client id: ' + clientId);
+    chrome.storage.local.set({
+        GA_CLIENT_KEY: clientId
+    });
+}
+
+function fetch_client_id() {
+    return new Promise((resolve, reject) => {
+        chrome.storage.local.get([GA_CLIENT_KEY], function(result) {
+            var clientId = result[GA_CLIENT_KEY];
+            console.log('fetched client id: ' + clientId);
+            resolve(clientId);
+        });
+    });
+}
 
 function joinDomains(domains) {
     domains = domains.flat();
@@ -66,6 +109,12 @@ function saveWashingtonPostUrl(tab) {
     tabToUrlMap[tab.id] = tab.url;
 }
 
+chrome.runtime.onInstalled.addListener(function (details) {
+    analyticsReadyPromise.then(() => {
+        ga('send', 'event', 'Install', details.reason);
+    });
+});
+
 chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     chrome.tabs.get(details.tabId, saveWashingtonPostUrl);
 }, {url: [{hostSuffix: "washingtonpost.com"}]});
@@ -100,6 +149,8 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
     var domain = all_domains.find(d => hostname.includes(d));
+    ga('send', 'event', 'Bypass', domain);
+
     var promises = [];
     var urlToLoad = null;
     if (cookie_domains.includes(domain)) {

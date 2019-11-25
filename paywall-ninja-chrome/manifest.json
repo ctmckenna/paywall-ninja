@@ -2,13 +2,14 @@
     "name": "Paywall Ninja",
     "manifest_version": 2,
     "version": "1.1",
-    "description": "Click the emoji to read the failing New York Times and other publications that aren't worth your time",
+    "description": "Click emoji to bypass newspaper paywalls",
     "permissions": [
         "contentSettings",
         "cookies",
         "webNavigation",
         "webRequest",
         "webRequestBlocking",
+        "storage",
         "*://*.nytimes.com/*",
         "*://*.washingtonpost.com/*",
         "*://*.theathletic.com/*",
@@ -19,7 +20,7 @@
         "*://*.wired.com/*"
     ],
     "background": {
-        "scripts": ["disable_js.js"],
+        "scripts": ["analytics.js", "disable_js.js"],
         "persistent": true
     },
     "page_action": {
