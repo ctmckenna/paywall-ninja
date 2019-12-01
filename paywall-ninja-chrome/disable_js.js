@@ -9,6 +9,8 @@ var analyticsReadyPromise = new Promise((resolve, reject) => {
 
 var bypass = false;
 var tabToUrlMap = {};
+var tabToListeners = {};
+var optionalPermissions = []
 
 var bot_domains=[
     "wsj.com",
@@ -29,6 +31,59 @@ var js_domains=[
 ]
 
 var all_domains = joinDomains([cookie_domains, bot_domains, js_domains])
+
+chrome.contextMenus.create({
+    title: "Attempt to break this paywall 🤞",
+    contexts: ["page_action"],
+    onclick: request_permission_and_bypass_site
+});
+
+function appendTabToListeners(tabId, listener) {
+    var listeners = tabToListeners[tabId] || [];
+    listeners.push(listener);
+    tabToListeners[tabId] = listeners;
+}
+
+function request_permission_and_bypass_site(info, tab) {
+    var hostname = new URL(tab.url).hostname;
+    var parsed = ninja.parseDomain(hostname);
+    if (!parsed) {
+        return;
+    }
+    var domain = parsed.domain + '.' + parsed.tld;
+    var permission = {
+        origins: [domainToRegex(domain)]
+    };
+    chrome.permissions.request(permission, function(granted) {
+        if (granted) {
+            optionalPermissions.push(permission);
+            try_bypass_site(tab, domain);
+        }
+    });
+}
+
+function try_bypass_site(tab, domain) {
+    ga('send', 'event', 'Attempt', domain, domain);
+    var promises = [];
+    promises.push(remove_cookies("." + domain));
+    disable_javascript(domainToRegex(domain));
+    bypass_as_google_bot(tab.id, domain);
+
+    var completedListener = (details) => navigationCompletedListener(details);
+    setupNavigationCompleted([domain], completedListener);
+    appendTabToListeners(tab.id, completedListener);
+
+    Promise.all(promises).then(() => {
+        bypass = true;
+        reloadTab(tab);
+    });
+}
+
+function bypass_as_google_bot(tabId, domain) {
+    var listener = (details) => modifyToGoogleBotHeaders(details);
+    setup_bot([domain], listener);
+    appendTabToListeners(tabId, listener);
+}
 
 function create_ga_tracker(clientId) {
     var createOptions = {
@@ -99,6 +154,9 @@ function domainsToHostSuffixFilter(domains) {
 }
 
 function saveWashingtonPostUrl(tab) {
+    if (chrome.runtime.lastError) {
+        ga('send', 'event', 'Error', 'Tab', chrome.runtime.lastError.message);
+    }
     if (!tab || !tab.url) {
         return;
     }
@@ -111,7 +169,7 @@ function saveWashingtonPostUrl(tab) {
 
 chrome.runtime.onInstalled.addListener(function (details) {
     analyticsReadyPromise.then(() => {
-        ga('send', 'event', 'Install', details.reason);
+        ga('send', 'event', 'Install', details.reason, details.reason);
     });
 });
 
@@ -119,18 +177,30 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     chrome.tabs.get(details.tabId, saveWashingtonPostUrl);
 }, {url: [{hostSuffix: "washingtonpost.com"}]});
 
-chrome.webNavigation.onCompleted.addListener(function(details) {
-    chrome.pageAction.show(details.tabId);
+function navigationCompletedListener(details) {
+    if (!tabToListeners[details.tabId]) {
+        //show pageAction on supported domains
+        chrome.pageAction.show(details.tabId);
+    }
     if (bypass) {
-        clear_changes();
+        clear_changes(details.tabId);
         bypass = false;
     }
-}, {url: domainsToHostSuffixFilter(all_domains)});
+}
 
-chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
+function setupNavigationCompleted(domains, listener) {
+    chrome.webNavigation.onCompleted.addListener(listener, {
+        url: domainsToHostSuffixFilter(domains)
+    });
+}
+
+setupNavigationCompleted(all_domains, navigationCompletedListener);
+
+function modifyToGoogleBotHeaders(details) {
     if (!bypass) {
         return;
     }
+    console.log('modifying headers');
     var requestHeaders = details.requestHeaders;
     removeHeaders(requestHeaders, ['User-Agent', 'X-Forwarded-For']);
     requestHeaders.push({
@@ -142,19 +212,25 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
         value: '66.249.66.2'
     });
     return { requestHeaders: requestHeaders };
-}, {
-    urls: domainsToRegex(bot_domains)
-}, ["blocking", "requestHeaders"]);
+}
+
+function setup_bot(domains, listener) {
+    chrome.webRequest.onBeforeSendHeaders.addListener(listener, {
+        urls: domainsToRegex(domains)
+    }, ["blocking", "requestHeaders"]);
+}
+
+setup_bot(bot_domains, modifyToGoogleBotHeaders);
 
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
     var domain = all_domains.find(d => hostname.includes(d));
-    ga('send', 'event', 'Bypass', domain);
+    ga('send', 'event', 'Bypass', domain, domain);
 
     var promises = [];
     var urlToLoad = null;
     if (cookie_domains.includes(domain)) {
-        promises.push(remove_cookies("." + domain, () => promise.resolve()))
+        promises.push(remove_cookies("." + domain));
     }
     if (bot_domains.includes(domain)) {
         promises.push(Promise.resolve());
@@ -193,8 +269,20 @@ function reloadTab(tab, url) {
     }
 }
 
-function clear_changes() {
+function clear_changes(tabId) {
     chrome.contentSettings.javascript.clear({});
+    var listeners = tabToListeners[tabId] || [];
+    listeners.forEach(listener => {
+        if (chrome.webRequest.onBeforeSendHeaders.hasListener(listener)) {
+            chrome.webRequest.onBeforeSendHeaders.removeListener(listener);
+        } else if (chrome.webNavigation.onCompleted.hasListener(listener)) {
+            chrome.webNavigation.onCompleted.removeListener(listener);
+        }
+    });
+    delete tabToListeners[tabId];
+    optionalPermissions.forEach(permission => {
+        chrome.permissions.remove(permission);
+    });
 }
 
 function disable_javascript(url_pattern) {
@@ -204,7 +292,7 @@ function disable_javascript(url_pattern) {
     });
 }
 
-function remove_cookies(domain, callback) {
+function remove_cookies(domain) {
     chrome.cookies.getAll({
         "domain": domain
     }, function (cookies) {
