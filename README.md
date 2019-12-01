@@ -2,7 +2,7 @@
 Bypass paywalls by clicking the 🤓 emoji to the right of the address bar.
 
 #### Installation Instructions
-1. Download this extension as a [ZIP file](https://github.com/ctmckenna/paywall-ninja/releases/download/v1.5/paywall-ninja-chrome.zip)
+1. Download this extension as a [ZIP file](https://github.com/ctmckenna/paywall-ninja/releases/download/v1.6/paywall-ninja-chrome.zip)
 1. Unzip the file and you should have a folder named `paywall-ninja-chrome`.
 1. In Chrome go to the extensions page (`chrome://extensions`) and enable Developer Mode on the top right.
 1. Drag the `paywall-ninja-chrome` folder anywhere on the page to load it.
