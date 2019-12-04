@@ -30,8 +30,15 @@ var js_domains=[
     "economist.com"
 ]
 
-var all_domains = joinDomains([cookie_domains, bot_domains, js_domains])
+var block_script_domains={
+    "businessinsider.com": [
+        "*://*.tinypass.com/*.js",
+     ]
+}
+var block_domains = Object.keys(block_script_domains);
+var block_regexes = Object.entries(block_script_domains).map(([k, v]) => v).flat();
 
+var all_domains = joinDomains([cookie_domains, bot_domains, js_domains, block_domains])
 chrome.contextMenus.create({
     title: "Attempt to break this paywall 🤞",
     contexts: ["page_action"],
@@ -44,13 +51,20 @@ function appendTabToListeners(tabId, listener) {
     tabToListeners[tabId] = listeners;
 }
 
-function request_permission_and_bypass_site(info, tab) {
-    var hostname = new URL(tab.url).hostname;
+function urlToDomain(url) {
+    var hostname = new URL(url).hostname;
     var parsed = ninja.parseDomain(hostname);
     if (!parsed) {
+        return null;
+    }
+    return parsed.domain + '.' + parsed.tld;
+}
+
+function request_permission_and_bypass_site(info, tab) {
+    var domain = urlToDomain(tab.url);
+    if (!domain) {
         return;
     }
-    var domain = parsed.domain + '.' + parsed.tld;
     var permission = {
         origins: [domainToRegex(domain)]
     };
@@ -120,6 +134,12 @@ function fetch_client_id() {
 }
 
 function joinDomains(domains) {
+    domains = domains.map((el) => {
+        if (!Array.isArray(el) && typeof el == 'object' && el != null) {
+            return Object.keys(el);
+        }
+        return el;
+    });
     domains = domains.flat();
     var set = new Set();
     var all = [];
@@ -177,10 +197,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     chrome.tabs.get(details.tabId, saveWashingtonPostUrl);
 }, {url: domainsToHostSuffixFilter("washingtonpost.com")});
 
-chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
-    chrome.pageAction.show(details.tabId);
-}, {url: domainsToHostSuffixFilter(all_domains)});
-
 function navigationCompletedListener(details) {
     if (bypass) {
         clear_changes(details.tabId);
@@ -195,12 +211,12 @@ function setupNavigationCompleted(domains, listener) {
 }
 
 setupNavigationCompleted(all_domains, navigationCompletedListener);
+setupNavigationCompleted(all_domains, (details) => chrome.pageAction.show(details.tabId));
 
 function modifyToGoogleBotHeaders(details) {
     if (!bypass) {
         return;
     }
-    console.log('modifying headers');
     var requestHeaders = details.requestHeaders;
     removeHeaders(requestHeaders, ['User-Agent', 'X-Forwarded-For']);
     requestHeaders.push({
@@ -222,18 +238,28 @@ function setup_bot(domains, listener) {
 
 setup_bot(bot_domains, modifyToGoogleBotHeaders);
 
+chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
+    if (!bypass) {
+        return;
+    }
+    if (block_domains.includes(urlToDomain(details.initiator))) {
+        console.log('blocking ' + details.url);
+        return { cancel: true };
+    }
+    console.log('not blocking ' + details.url);
+}, {
+    urls: block_regexes
+}, ["blocking"]);
+
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
     var domain = all_domains.find(d => hostname.includes(d));
     ga('send', 'event', 'Bypass', domain, domain);
 
-    var promises = [];
+    var promises = [Promise.resolve()];
     var urlToLoad = null;
     if (cookie_domains.includes(domain)) {
         promises.push(remove_cookies("." + domain));
-    }
-    if (bot_domains.includes(domain)) {
-        promises.push(Promise.resolve());
     }
     if (js_domains.includes(domain)) {
         disable_javascript(domainToRegex(domain));
@@ -242,12 +268,10 @@ chrome.pageAction.onClicked.addListener(function(tab) {
     if (domain === 'washingtonpost.com') {
         urlToLoad = tabToUrlMap[tab.id];
     }
-    if (promises.length > 0) {
-        Promise.all(promises).then(() => {
-            bypass = true;
-            reloadTab(tab, urlToLoad);
-        });
-    }
+    Promise.all(promises).then(() => {
+        bypass = true;
+        reloadTab(tab, urlToLoad);
+    });
 });
 
 function removeHeaders(headers, headerNames) {

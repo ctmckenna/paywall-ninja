@@ -18,7 +18,11 @@
         "*://*.latimes.com/*",
         "*://*.sfchronicle.com/*",
         "*://*.economist.com/*",
-        "*://*.wired.com/*"
+        "*://*.wired.com/*",
+        "*://*.businessinsider.com/*",
+
+        //problematic scripts
+        "*://*.tinypass.com/*.js"
     ],
     "optional_permissions": [
         "*://*/"
