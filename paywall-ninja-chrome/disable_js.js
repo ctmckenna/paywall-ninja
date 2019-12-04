@@ -20,7 +20,8 @@ var bot_domains=[
 var cookie_domains=[
     "nytimes.com",
     "washingtonpost.com",
-    "wired.com"
+    "wired.com",
+    "bloomberg.com"
 ]
 
 var js_domains=[
@@ -30,15 +31,13 @@ var js_domains=[
     "economist.com"
 ]
 
-var block_script_domains={
-    "businessinsider.com": [
-        "*://*.tinypass.com/*.js",
-     ]
-}
-var block_domains = Object.keys(block_script_domains);
-var block_regexes = Object.entries(block_script_domains).map(([k, v]) => v).flat();
+var all_domains = joinDomains([
+    cookie_domains,
+    bot_domains,
+    js_domains,
+    "businessinsider.com"
+]);
 
-var all_domains = joinDomains([cookie_domains, bot_domains, js_domains, block_domains])
 chrome.contextMenus.create({
     title: "Attempt to break this paywall 🤞",
     contexts: ["page_action"],
@@ -242,13 +241,9 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
     if (!bypass) {
         return;
     }
-    if (block_domains.includes(urlToDomain(details.initiator))) {
-        console.log('blocking ' + details.url);
-        return { cancel: true };
-    }
-    console.log('not blocking ' + details.url);
+    return { cancel: true };
 }, {
-    urls: block_regexes
+    urls: ["*://*.tinypass.com/*.js"]
 }, ["blocking"]);
 
 chrome.pageAction.onClicked.addListener(function(tab) {
@@ -260,10 +255,10 @@ chrome.pageAction.onClicked.addListener(function(tab) {
     var urlToLoad = null;
     if (cookie_domains.includes(domain)) {
         promises.push(remove_cookies("." + domain));
+        promises.push(clear_localstorage(tab));
     }
     if (js_domains.includes(domain)) {
         disable_javascript(domainToRegex(domain));
-        promises.push(Promise.resolve());
     }
     if (domain === 'washingtonpost.com') {
         urlToLoad = tabToUrlMap[tab.id];
@@ -313,6 +308,17 @@ function disable_javascript(url_pattern) {
     chrome.contentSettings.javascript.set({
         "primaryPattern": url_pattern,
         "setting": "block"
+    });
+}
+
+function clear_localstorage(tab) {
+    return new Promise((resolve, reject) => {
+        chrome.tabs.executeScript(tab.id, {
+            code: "window.localStorage.clear()",
+            allFrames: true
+        }, function() {
+            resolve();
+        });
     });
 }
 

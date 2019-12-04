@@ -1,7 +1,7 @@
 {
     "name": "Paywall Ninja",
     "manifest_version": 2,
-    "version": "1.5",
+    "version": "1.7",
     "description": "Click emoji to bypass newspaper paywalls",
     "permissions": [
         "contentSettings",
@@ -20,6 +20,7 @@
         "*://*.economist.com/*",
         "*://*.wired.com/*",
         "*://*.businessinsider.com/*",
+        "*://*.bloomberg.com/*",
 
         //problematic scripts
         "*://*.tinypass.com/*.js"
