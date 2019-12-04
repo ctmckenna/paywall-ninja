@@ -175,13 +175,13 @@ chrome.runtime.onInstalled.addListener(function (details) {
 
 chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     chrome.tabs.get(details.tabId, saveWashingtonPostUrl);
-}, {url: [{hostSuffix: "washingtonpost.com"}]});
+}, {url: domainsToHostSuffixFilter("washingtonpost.com")});
+
+chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
+    chrome.pageAction.show(details.tabId);
+}, {url: domainsToHostSuffixFilter(all_domains)});
 
 function navigationCompletedListener(details) {
-    if (!tabToListeners[details.tabId]) {
-        //show pageAction on supported domains
-        chrome.pageAction.show(details.tabId);
-    }
     if (bypass) {
         clear_changes(details.tabId);
         bypass = false;
