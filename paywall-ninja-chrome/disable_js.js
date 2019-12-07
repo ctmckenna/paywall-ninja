@@ -10,7 +10,16 @@ var analyticsReadyPromise = new Promise((resolve, reject) => {
 var bypass = false;
 var tabToUrlMap = {};
 var tabToListeners = {};
-var optionalPermissions = []
+var optionalPermissions = [];
+var attemptBypassMap = {};
+var bypassDispatch = [tryBypassPassively, tryBypassAggressively];
+var bypassTitles = ['Attempt to break this paywall 🤞', 'Try bypassing another way 🤷', "Create an issue on github to support this site"];
+
+var bypassContextMenuItemId = chrome.contextMenus.create({
+    title: bypassContextMenuItemTitle(),
+    contexts: ["page_action"],
+    onclick: request_permission_and_bypass_site
+});
 
 var bot_domains=[
     "wsj.com",
@@ -38,12 +47,6 @@ var all_domains = joinDomains([
     "businessinsider.com"
 ]);
 
-chrome.contextMenus.create({
-    title: "Attempt to break this paywall 🤞",
-    contexts: ["page_action"],
-    onclick: request_permission_and_bypass_site
-});
-
 function appendTabToListeners(tabId, listener) {
     var listeners = tabToListeners[tabId] || [];
     listeners.push(listener);
@@ -51,6 +54,9 @@ function appendTabToListeners(tabId, listener) {
 }
 
 function urlToDomain(url) {
+    if (!url) {
+        return null;
+    }
     var hostname = new URL(url).hostname;
     var parsed = ninja.parseDomain(hostname);
     if (!parsed) {
@@ -70,22 +76,105 @@ function request_permission_and_bypass_site(info, tab) {
     chrome.permissions.request(permission, function(granted) {
         if (granted) {
             optionalPermissions.push(permission);
-            try_bypass_site(tab, domain);
+            dispatchToBypass(tab, domain);
         }
     });
 }
 
-function try_bypass_site(tab, domain) {
-    ga('send', 'event', 'Attempt', domain, domain);
+function bypassContextMenuItemTitle(tab) {
+    var idx = bypassIdx(tab);
+    return bypassTitles[idx];
+}
+
+function bypassContextMenuItemEnabled(tab) {
+    var idx = bypassIdx(tab);
+    return idx < bypassDispatch.length;
+}
+
+function updateContextMenuItemTitle(tabId) {
+    chrome.tabs.get(tabId, function(tab) {
+        chrome.contextMenus.update(bypassContextMenuItemId, {
+            title: bypassContextMenuItemTitle(tab),
+            enabled: bypassContextMenuItemEnabled(tab)
+        });
+    });
+}
+
+chrome.tabs.onActivated.addListener(function(details) {
+    updateContextMenuItemTitle(details.tabId);
+    chrome.tabs.get(details.tabId, function(tab) {
+        var domain = urlToDomain(tab.url);
+        if (domain && all_domains.includes(domain)) {
+            chrome.pageAction.show(tab.id);
+        }
+    });
+});
+
+function bypassIdx(tab) {
+    if (tab && attemptBypassMap[tab.id]) {
+        return attemptBypassMap[tab.id]['next'];
+    }
+    return 0;
+}
+
+function listenOnce(objectToListenOn, listener) {
+    var self = {fn: null};
+    var wrapper = (details) => {
+        if (listener(details)) {
+            objectToListenOn.removeListener(self.fn);
+        }
+    };
+    self.fn = wrapper;
+    objectToListenOn.addListener(wrapper);
+}
+
+function dispatchToBypass(tab, domain) {
+    var idx = bypassIdx(tab);
+    bypassDispatch[idx](tab, domain);
+    attemptBypassMap[tab.id] = {'url': tab.url, 'next': idx + 1};
+    updateContextMenuItemTitle(tab.id);
+    listenOnce(chrome.webNavigation.onBeforeNavigate, function(details) {
+        if (details.frameId !== 0) {
+            return false;
+        }
+        if (details.tabId === tab.id && urlToDomain(details.url) != null && details.url !== tab.url) {
+            delete attemptBypassMap[tab.id];
+            return true;
+        }
+        updateContextMenuItemTitle(details.tabId);
+        return false;//dont remove
+    });
+}
+
+function tryBypassPassively(tab, domain) {
+    ga('send', 'event', 'Attempt', 'Passive', domain);
     var promises = [];
     promises.push(remove_cookies("." + domain));
-    disable_javascript(domainToRegex(domain));
+    promises.push(clear_localstorage(tab));
     bypass_as_google_bot(tab.id, domain);
 
+    setupNavigationCompletedForBypassAttempt(tab, domain);
+    Promise.all(promises).then(() => {
+        bypass = true;
+        reloadTab(tab);
+    });
+}
+
+function setupNavigationCompletedForBypassAttempt(tab, domain) {
     var completedListener = (details) => navigationCompletedListener(details);
     setupNavigationCompleted([domain], completedListener);
     appendTabToListeners(tab.id, completedListener);
+}
 
+function tryBypassAggressively(tab, domain) {
+    ga('send', 'event', 'Attempt', 'Aggressive', domain);
+    var promises = [];
+    promises.push(remove_cookies("." + domain));
+    promises.push(clear_localstorage(tab));
+    bypass_as_google_bot(tab.id, domain);
+    disable_javascript(domainToRegex(domain));
+
+    setupNavigationCompletedForBypassAttempt(tab, domain);
     Promise.all(promises).then(() => {
         bypass = true;
         reloadTab(tab);
@@ -164,26 +253,26 @@ function domainsToRegex(domains) {
 
 function domainsToHostSuffixFilter(domains) {
     var filter = [];
-    for (var i = 0; i < domains.length; ++i) {
+    if (typeof domains === 'string') {
+        domains = [domains];
+    }
+    for (var domain of domains) {
         filter.push({
-            hostSuffix: domains[i]
+            hostSuffix: domain
         });
     }
     return filter;
 }
 
-function saveWashingtonPostUrl(tab) {
-    if (chrome.runtime.lastError) {
-        ga('send', 'event', 'Error', 'Tab', chrome.runtime.lastError.message);
-    }
-    if (!tab || !tab.url) {
+function saveWashingtonPostUrl(tabId, url) {
+    if (!tabId || !url) {
         return;
     }
-    var pathname = new URL(tab.url).pathname;
+    var pathname = new URL(url).pathname;
     if (!pathname || pathname == '/') {
         return;
     }
-    tabToUrlMap[tab.id] = tab.url;
+    tabToUrlMap[tabId] = url;
 }
 
 chrome.runtime.onInstalled.addListener(function (details) {
@@ -193,7 +282,9 @@ chrome.runtime.onInstalled.addListener(function (details) {
 });
 
 chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
-    chrome.tabs.get(details.tabId, saveWashingtonPostUrl);
+    if (details.tabId && details.frameId === 0) {
+        saveWashingtonPostUrl(details.tabId, details.url);
+    }
 }, {url: domainsToHostSuffixFilter("washingtonpost.com")});
 
 function navigationCompletedListener(details) {
