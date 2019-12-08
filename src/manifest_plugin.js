@@ -1,6 +1,7 @@
 const pluginName = 'ManifestPlugin';
 const fs = require('fs');
 const path = require('path');
+const Domains = require('./domains.js');
 
 class ManifestPlugin {
     buildManifest(mode, outputDir) {
@@ -11,7 +12,8 @@ class ManifestPlugin {
         } else {
             manifest.background.scripts.unshift('ga_tracking_id.js');
         }
-        fs.writeFileSync(path.resolve(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 4));
+        manifest.permissions.push(...Domains.toRegex(Domains.all));
+        fs.writeFileSync(path.resolve(outputDir, 'manifest.json'), JSON.stringify(manifest));
         process.stdout.write('Done\n');
     }
 

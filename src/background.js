@@ -5,14 +5,21 @@ var bypass = false;
 var tabToUrlMap = {};
 var tabToListeners = {};
 var optionalPermissions = [];
-var attemptBypassMap = {};
-var bypassDispatch = [tryBypassPassively, tryBypassAggressively];
-var bypassTitles = ['Attempt to break this paywall 🤞', 'Try bypassing another way 🤷', "Create an issue on github to support this site"];
-
 var bypassContextMenuItemId = chrome.contextMenus.create({
-    title: bypassContextMenuItemTitle(),
+    title: 'Attempt to break this paywall 🤞',
+    contexts: ["page_action"]
+});
+chrome.contextMenus.create({
+    title: '🍪 Clear site data',
+    parentId: bypassContextMenuItemId,
     contexts: ["page_action"],
-    onclick: request_permission_and_bypass_site
+    onclick: bypassOnClick(tryBypassPassively)
+});
+chrome.contextMenus.create({
+    title: '🛑 Disable javascript',
+    parentId: bypassContextMenuItemId,
+    contexts: ["page_action"],
+    onclick: bypassOnClick(tryBypassAggressively)
 });
 
 
@@ -22,45 +29,35 @@ function appendTabToListeners(tabId, listener) {
     tabToListeners[tabId] = listeners;
 }
 
-function request_permission_and_bypass_site(info, tab) {
-    var domain = Domains.fromUrl(tab.url);
-    if (!domain) {
-        return;
-    }
-    var permission = {
-        origins: [Domains.toRegex(domain)]
-    };
-    chrome.permissions.request(permission, function(granted) {
-        if (granted) {
-            optionalPermissions.push(permission);
-            //dispatchToBypass(tab, domain);
-            tryBypassAggressively(tab, domain);
+function requestBypassPermission(tab) {
+    return new Promise((resolve, reject) => {
+        var domain = Domains.fromUrl(tab.url);
+        if (!domain) {
+            reject();
         }
-    });
-}
-
-function bypassContextMenuItemTitle(tab) {
-    var idx = bypassIdx(tab);
-    return bypassTitles[idx];
-}
-
-function bypassContextMenuItemEnabled(tab) {
-    var idx = bypassIdx(tab);
-    return idx < bypassDispatch.length;
-}
-
-function updateContextMenuItemTitle(tabId) {
-    chrome.tabs.get(tabId, function(tab) {
-        if (!tab) return;
-        chrome.contextMenus.update(bypassContextMenuItemId, {
-            title: bypassContextMenuItemTitle(tab),
-            enabled: bypassContextMenuItemEnabled(tab)
+        var permission = {
+            origins: [Domains.toRegex(domain)]
+        };
+        chrome.permissions.request(permission, function(granted) {
+            if (granted) {
+                optionalPermissions.push(permission);
+                resolve(domain);
+            } else {
+                reject();
+            }
         });
     });
 }
 
+function bypassOnClick(bypassFn) {
+    return (info, tab) => {
+        requestBypassPermission(tab).then((domain) => {
+            bypassFn(tab, domain);
+        });
+    };
+}
+
 chrome.tabs.onActivated.addListener(function(details) {
-    updateContextMenuItemTitle(details.tabId);
     chrome.tabs.get(details.tabId, function(tab) {
         if (!tab) return;
         var domain = Domains.fromUrl(tab.url);
@@ -69,13 +66,6 @@ chrome.tabs.onActivated.addListener(function(details) {
         }
     });
 });
-
-function bypassIdx(tab) {
-    if (tab && attemptBypassMap[tab.id]) {
-        return attemptBypassMap[tab.id]['next'];
-    }
-    return 0;
-}
 
 function listenOnce(objectToListenOn, listener) {
     var self = {fn: null};
@@ -86,24 +76,6 @@ function listenOnce(objectToListenOn, listener) {
     };
     self.fn = wrapper;
     objectToListenOn.addListener(wrapper);
-}
-
-function dispatchToBypass(tab, domain) {
-    var idx = bypassIdx(tab);
-    bypassDispatch[idx](tab, domain);
-    attemptBypassMap[tab.id] = {'url': tab.url, 'next': idx + 1};
-    updateContextMenuItemTitle(tab.id);
-    listenOnce(chrome.webNavigation.onBeforeNavigate, function(details) {
-        if (details.frameId !== 0) {
-            return false;
-        }
-        if (details.tabId === tab.id && Domains.fromUrl(details.url) != null && details.url !== tab.url) {
-            delete attemptBypassMap[tab.id];
-            return true;
-        }
-        updateContextMenuItemTitle(details.tabId);
-        return false;//dont remove
-    });
 }
 
 function tryBypassPassively(tab, domain) {
@@ -239,7 +211,7 @@ chrome.pageAction.onClicked.addListener(function(tab) {
         promises.push(clear_localstorage(tab));
     }
     if (Domains.js.includes(domain)) {
-        disable_javascript(domain.toRegex(domain));
+        disable_javascript(Domains.toRegex(domain));
     }
     if (domain === 'washingtonpost.com') {
         urlToLoad = tabToUrlMap[tab.id];

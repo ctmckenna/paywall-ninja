@@ -1,7 +1,7 @@
 {
     "name": "Paywall Ninja",
     "manifest_version": 2,
-    "version": "1.7",
+    "version": "1.8",
     "description": "Click emoji to bypass newspaper paywalls",
     "permissions": [
         "contentSettings",
@@ -11,16 +11,6 @@
         "webRequestBlocking",
         "storage",
         "contextMenus",
-        "*://*.nytimes.com/*",
-        "*://*.washingtonpost.com/*",
-        "*://*.theathletic.com/*",
-        "*://*.wsj.com/*",
-        "*://*.latimes.com/*",
-        "*://*.sfchronicle.com/*",
-        "*://*.economist.com/*",
-        "*://*.wired.com/*",
-        "*://*.businessinsider.com/*",
-        "*://*.bloomberg.com/*",
         "*://*.tinypass.com/*.js"
     ],
     "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
