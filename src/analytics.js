@@ -50,3 +50,16 @@ chrome.runtime.onInstalled.addListener(function (details) {
         ga('send', 'event', 'Install', details.reason, details.reason);
     });
 });
+
+function logBypass(domain) {
+    ga('send', 'event', 'Bypass', domain, domain);
+}
+
+function logAttempt(domain) {
+    ga('send', 'event', 'Attempt', domain, domain);
+}
+
+module.exports = {
+    logBypass,
+    logAttempt
+}

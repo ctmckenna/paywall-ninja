@@ -33,7 +33,8 @@ function request_permission_and_bypass_site(info, tab) {
     chrome.permissions.request(permission, function(granted) {
         if (granted) {
             optionalPermissions.push(permission);
-            dispatchToBypass(tab, domain);
+            //dispatchToBypass(tab, domain);
+            tryBypassAggressively(tab, domain);
         }
     });
 }
@@ -50,6 +51,7 @@ function bypassContextMenuItemEnabled(tab) {
 
 function updateContextMenuItemTitle(tabId) {
     chrome.tabs.get(tabId, function(tab) {
+        if (!tab) return;
         chrome.contextMenus.update(bypassContextMenuItemId, {
             title: bypassContextMenuItemTitle(tab),
             enabled: bypassContextMenuItemEnabled(tab)
@@ -60,6 +62,7 @@ function updateContextMenuItemTitle(tabId) {
 chrome.tabs.onActivated.addListener(function(details) {
     updateContextMenuItemTitle(details.tabId);
     chrome.tabs.get(details.tabId, function(tab) {
+        if (!tab) return;
         var domain = Domains.fromUrl(tab.url);
         if (domain && Domains.all.includes(domain)) {
             chrome.pageAction.show(tab.id);
@@ -104,7 +107,7 @@ function dispatchToBypass(tab, domain) {
 }
 
 function tryBypassPassively(tab, domain) {
-    ga('send', 'event', 'Attempt', 'Passive', domain);
+    Analytics.logAttempt(domain);
     var promises = [];
     promises.push(remove_cookies("." + domain));
     promises.push(clear_localstorage(tab));
@@ -124,7 +127,7 @@ function setupNavigationCompletedForBypassAttempt(tab, domain) {
 }
 
 function tryBypassAggressively(tab, domain) {
-    ga('send', 'event', 'Attempt', 'Aggressive', domain);
+    Analytics.logAttempt(domain);
     var promises = [];
     promises.push(remove_cookies("." + domain));
     promises.push(clear_localstorage(tab));
@@ -227,7 +230,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
     var domain = Domains.all.find(d => hostname.includes(d));
-    ga('send', 'event', 'Bypass', domain, domain);
+    Analytics.logBypass(domain);
 
     var promises = [Promise.resolve()];
     var urlToLoad = null;
