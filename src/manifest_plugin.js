@@ -8,6 +8,8 @@ class ManifestPlugin {
         if (mode !== 'production') {
             process.stdout.write('relaxed dev security policy...');
             manifest['content_security_policy'] = "script-src 'self' 'unsafe-eval'; object-src 'self'";
+        } else {
+            manifest.background.scripts.unshift('ga_tracking_id.js');
         }
         fs.writeFileSync(path.resolve(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 4));
         process.stdout.write('Done\n');

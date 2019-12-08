@@ -1,13 +1,5 @@
-const parseDomain = require('parse-domain');
-
-var GA_CLIENT_KEY = 'ga:clientId';
-
-var analyticsReadyPromise = new Promise((resolve, reject) => {
-    fetch_client_id()
-        .then(create_ga_tracker)
-        .then(save_client_id)
-        .then(resolve);
-});
+const Domains = require('./domains');
+const Analytics = require('./analytics');
 
 var bypass = false;
 var tabToUrlMap = {};
@@ -23,31 +15,6 @@ var bypassContextMenuItemId = chrome.contextMenus.create({
     onclick: request_permission_and_bypass_site
 });
 
-var bot_domains=[
-    "wsj.com",
-    "theathletic.com"
-]
-
-var cookie_domains=[
-    "nytimes.com",
-    "washingtonpost.com",
-    "wired.com",
-    "bloomberg.com"
-]
-
-var js_domains=[
-    "nytimes.com",
-    "latimes.com",
-    "sfchronicle.com",
-    "economist.com"
-]
-
-var all_domains = joinDomains([
-    cookie_domains,
-    bot_domains,
-    js_domains,
-    "businessinsider.com"
-]);
 
 function appendTabToListeners(tabId, listener) {
     var listeners = tabToListeners[tabId] || [];
@@ -55,25 +22,13 @@ function appendTabToListeners(tabId, listener) {
     tabToListeners[tabId] = listeners;
 }
 
-function urlToDomain(url) {
-    if (!url) {
-        return null;
-    }
-    var hostname = new URL(url).hostname;
-    var parsed = parseDomain(hostname);
-    if (!parsed) {
-        return null;
-    }
-    return parsed.domain + '.' + parsed.tld;
-}
-
 function request_permission_and_bypass_site(info, tab) {
-    var domain = urlToDomain(tab.url);
+    var domain = Domains.fromUrl(tab.url);
     if (!domain) {
         return;
     }
     var permission = {
-        origins: [domainToRegex(domain)]
+        origins: [Domains.toRegex(domain)]
     };
     chrome.permissions.request(permission, function(granted) {
         if (granted) {
@@ -105,8 +60,8 @@ function updateContextMenuItemTitle(tabId) {
 chrome.tabs.onActivated.addListener(function(details) {
     updateContextMenuItemTitle(details.tabId);
     chrome.tabs.get(details.tabId, function(tab) {
-        var domain = urlToDomain(tab.url);
-        if (domain && all_domains.includes(domain)) {
+        var domain = Domains.fromUrl(tab.url);
+        if (domain && Domains.all.includes(domain)) {
             chrome.pageAction.show(tab.id);
         }
     });
@@ -139,7 +94,7 @@ function dispatchToBypass(tab, domain) {
         if (details.frameId !== 0) {
             return false;
         }
-        if (details.tabId === tab.id && urlToDomain(details.url) != null && details.url !== tab.url) {
+        if (details.tabId === tab.id && Domains.fromUrl(details.url) != null && details.url !== tab.url) {
             delete attemptBypassMap[tab.id];
             return true;
         }
@@ -174,7 +129,7 @@ function tryBypassAggressively(tab, domain) {
     promises.push(remove_cookies("." + domain));
     promises.push(clear_localstorage(tab));
     bypass_as_google_bot(tab.id, domain);
-    disable_javascript(domainToRegex(domain));
+    disable_javascript(Domains.toRegex(domain));
 
     setupNavigationCompletedForBypassAttempt(tab, domain);
     Promise.all(promises).then(() => {
@@ -187,70 +142,6 @@ function bypass_as_google_bot(tabId, domain) {
     var listener = (details) => modifyToGoogleBotHeaders(details);
     setup_bot([domain], listener);
     appendTabToListeners(tabId, listener);
-}
-
-function create_ga_tracker(clientId) {
-    var createOptions = {
-        storage: 'none',
-        storeGac: false
-    }
-    if (clientId) {
-        createOptions['clientId'] = clientId;
-    }
-    ga('create', 'UA-39947032-2', createOptions);
-    ga('set', 'checkProtocolTask', function(){ /* nothing */ });
-    return new Promise((resolve, reject) => {
-        ga(function(tracker) {
-            resolve(tracker.get('clientId'));
-        });
-    });
-}
-
-function save_client_id(clientId) {
-    console.log('saving client id: ' + clientId);
-    chrome.storage.local.set({
-        GA_CLIENT_KEY: clientId
-    });
-}
-
-function fetch_client_id() {
-    return new Promise((resolve, reject) => {
-        chrome.storage.local.get([GA_CLIENT_KEY], function(result) {
-            var clientId = result[GA_CLIENT_KEY];
-            console.log('fetched client id: ' + clientId);
-            resolve(clientId);
-        });
-    });
-}
-
-function joinDomains(domains) {
-    domains = domains.map((el) => {
-        if (!Array.isArray(el) && typeof el == 'object' && el != null) {
-            return Object.keys(el);
-        }
-        return el;
-    });
-    domains = domains.flat();
-    var set = new Set();
-    var all = [];
-    for (var i = 0; i < domains.length; ++i) {
-        set.add(domains[i]);
-    }
-    return Array.from(set);
-}
-
-function domainToRegex(domain) {
-    return "*://*." + domain + "/*";
-}
-
-//eg bot_sites to
-//    *://*.wsj.com/*
-function domainsToRegex(domains) {
-    var arr = [];
-    for (var i = 0; i < domains.length; ++i) {
-        arr.push(domainToRegex(domains[i]));
-    }
-    return arr;
 }
 
 function domainsToHostSuffixFilter(domains) {
@@ -277,12 +168,6 @@ function saveWashingtonPostUrl(tabId, url) {
     tabToUrlMap[tabId] = url;
 }
 
-chrome.runtime.onInstalled.addListener(function (details) {
-    analyticsReadyPromise.then(() => {
-        ga('send', 'event', 'Install', details.reason, details.reason);
-    });
-});
-
 chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     if (details.tabId && details.frameId === 0) {
         saveWashingtonPostUrl(details.tabId, details.url);
@@ -302,8 +187,8 @@ function setupNavigationCompleted(domains, listener) {
     });
 }
 
-setupNavigationCompleted(all_domains, navigationCompletedListener);
-setupNavigationCompleted(all_domains, (details) => chrome.pageAction.show(details.tabId));
+setupNavigationCompleted(Domains.all, navigationCompletedListener);
+setupNavigationCompleted(Domains.all, (details) => chrome.pageAction.show(details.tabId));
 
 function modifyToGoogleBotHeaders(details) {
     if (!bypass) {
@@ -324,11 +209,11 @@ function modifyToGoogleBotHeaders(details) {
 
 function setup_bot(domains, listener) {
     chrome.webRequest.onBeforeSendHeaders.addListener(listener, {
-        urls: domainsToRegex(domains)
+        urls: Domains.toRegex(domains)
     }, ["blocking", "requestHeaders"]);
 }
 
-setup_bot(bot_domains, modifyToGoogleBotHeaders);
+setup_bot(Domains.bots, modifyToGoogleBotHeaders);
 
 chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
     if (!bypass) {
@@ -341,17 +226,17 @@ chrome.webRequest.onBeforeSendHeaders.addListener(function(details) {
 
 chrome.pageAction.onClicked.addListener(function(tab) {
     var hostname = new URL(tab.url).hostname;
-    var domain = all_domains.find(d => hostname.includes(d));
+    var domain = Domains.all.find(d => hostname.includes(d));
     ga('send', 'event', 'Bypass', domain, domain);
 
     var promises = [Promise.resolve()];
     var urlToLoad = null;
-    if (cookie_domains.includes(domain)) {
+    if (Domains.cookies.includes(domain)) {
         promises.push(remove_cookies("." + domain));
         promises.push(clear_localstorage(tab));
     }
-    if (js_domains.includes(domain)) {
-        disable_javascript(domainToRegex(domain));
+    if (Domains.js.includes(domain)) {
+        disable_javascript(domain.toRegex(domain));
     }
     if (domain === 'washingtonpost.com') {
         urlToLoad = tabToUrlMap[tab.id];

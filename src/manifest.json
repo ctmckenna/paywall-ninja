@@ -28,7 +28,7 @@
         "*://*/"
     ],
     "background": {
-        "scripts": ["analytics.js", "ninja-dist.js", "background.js"],
+        "scripts": ["google_analytics.js", "background.js"],
         "persistent": true
     },
     "page_action": {
