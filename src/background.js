@@ -1,3 +1,5 @@
+const parseDomain = require('parse-domain');
+
 var GA_CLIENT_KEY = 'ga:clientId';
 
 var analyticsReadyPromise = new Promise((resolve, reject) => {
@@ -58,7 +60,7 @@ function urlToDomain(url) {
         return null;
     }
     var hostname = new URL(url).hostname;
-    var parsed = ninja.parseDomain(hostname);
+    var parsed = parseDomain(hostname);
     if (!parsed) {
         return null;
     }
@@ -442,3 +444,4 @@ function remove_cookies(domain) {
         return Promise.all(promises);
     });
 }
+

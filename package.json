@@ -1,0 +1,17 @@
+{
+  "name": "paywall-ninja",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "dev": "webpack --mode=development",
+      "build": "webpack"
+  },
+  "devDependencies": {
+    "webpack": "^4.41.2",
+    "webpack-cli": "^3.3.10"
+  },
+  "dependencies": {
+    "parse-domain": "^2.3.4"
+  }
+}

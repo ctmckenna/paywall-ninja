@@ -28,11 +28,7 @@
         "*://*/"
     ],
     "background": {
-        "scripts": [
-            "analytics.js",
-            "ninja-dist.js",
-            "background.js"
-        ],
+        "scripts": ["analytics.js", "ninja-dist.js", "background.js"],
         "persistent": true
     },
     "page_action": {
@@ -43,7 +39,7 @@
         },
         "default_title": "Click to bypass paywall"
     },
-    "icons": {
+    "icons" : {
         "16": "emoji16.png",
         "48": "emoji48.png",
         "128": "emoji128.png"
