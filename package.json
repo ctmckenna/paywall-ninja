@@ -12,6 +12,6 @@
     "webpack-cli": "^3.3.10"
   },
   "dependencies": {
-    "parse-domain": "^2.3.4"
+    "parse-domain": "^7.0.1"
   }
 }
